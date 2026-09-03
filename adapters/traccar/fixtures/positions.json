@@ -1,0 +1,14 @@
+[
+  {
+    "id": 18341,
+    "deviceId": 7,
+    "protocol": "teltonika",
+    "serverTime": "2026-02-10T08:00:01.000+00:00",
+    "deviceTime": "2026-02-10T08:00:00.000+00:00",
+    "fixTime": "2026-02-10T08:00:00.000+00:00",
+    "latitude": 52.5200,
+    "longitude": 13.4050,
+    "speed": 48.6,
+    "attributes": {"ignition": true, "odometer": 123456789}
+  }
+]

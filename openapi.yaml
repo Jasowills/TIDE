@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: TIDE API
+  version: 0.1.0
+  description: Telematics Infrastructure & Data Engine — REST + WebSocket (docs/api.md)
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/telemetry:
+    post:
+      summary: Ingest one canonical telemetry point
+      responses:
+        '202': { description: accepted }
+        '422': { description: invalid telemetry }
+  /v1/telemetry:batch:
+    post:
+      summary: Ingest a batch envelope {"batch":[...]}
+      responses:
+        '202': { description: accepted }
+  /v1/events:
+    get:
+      summary: Query events, tenant-scoped (tenant required)
+      parameters:
+        - { name: tenant, in: query, required: true, schema: { type: string } }
+        - { name: vehicle, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+      responses:
+        '200': { description: events }
+        '400': { description: tenant required }
+  /v1/vehicles/{id}/state:
+    get:
+      summary: Current vehicle state
+      responses:
+        '200': { description: state }
+        '404': { description: unknown vehicle }
+  /v1/geofences:
+    get:
+      summary: List geofences
+      responses: { '200': { description: geofences } }
+    post:
+      summary: Create geofence
+      responses:
+        '201': { description: created }
+        '422': { description: invalid }
+  /v1/rules/triggers:
+    get:
+      summary: Rule evaluation trace (why did this fire)
+      responses: { '200': { description: triggers } }
+  /v1/connections:
+    get:
+      summary: Adapter health
+      responses: { '200': { description: connections } }
+  /v1/stream:
+    get:
+      summary: WebSocket live event stream
+      responses: { '101': { description: switching protocols } }

@@ -1,0 +1,11 @@
+name: speeding
+seed: 42
+stepSecs: 5
+durationSecs: 300
+start: {lat: 52.52, lng: 13.405}
+spreadKm: 2.0
+mix:
+  speeding: 0.4
+  normal: 0.4
+  idling: 0.2
+faults: {}

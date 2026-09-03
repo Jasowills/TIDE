@@ -1,0 +1,7 @@
+{
+  "name": "@tide/sdk",
+  "description": "Typed TypeScript client for the TIDE API: telemetry ingest, tenant-scoped event queries, live WebSocket stream",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

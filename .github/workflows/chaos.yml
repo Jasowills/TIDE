@@ -1,0 +1,27 @@
+name: chaos
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  live-chaos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - name: Bring up stack
+        run: docker compose up -d --build postgres redis nats tide-api tide-engine
+      - name: Live chaos (DB/Redis/NATS restart, malformed storms)
+        run: TIDE_CHAOS_LIVE=1 go test ./tests/ -v
+      - name: Redis restart recovery
+        run: |
+          docker restart tide-redis-1
+          sleep 8
+          go run ./cmd/tide doctor
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

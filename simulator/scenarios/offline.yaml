@@ -1,0 +1,10 @@
+name: offline
+seed: 13
+stepSecs: 30
+durationSecs: 1200
+start: {lat: 52.52, lng: 13.405}
+spreadKm: 3.0
+mix:
+  normal: 0.7
+  offline: 0.3
+faults: {}

@@ -1,0 +1,10 @@
+env: dev
+apiPort: 8080
+enginePort: 8081
+postgres:
+  dsn: "postgres://tide:tide@localhost:5432/tide?sslmode=disable"
+redis:
+  addr: "localhost:6379"
+nats:
+  url: "nats://localhost:4222"
+otelEndpoint: ""

@@ -1,0 +1,12 @@
+id: speeding-alert
+version: v2
+when:
+  eventType: vehicle.speeding.started
+  conditions:
+    - field: speedKmh
+      op: ">"
+      value: 130
+then:
+  emit: incident.created
+cooldownSecs: 60
+maxActionsPerHour: 100

@@ -1,0 +1,14 @@
+name: mixed
+seed: 99
+stepSecs: 5
+durationSecs: 300
+start: {lat: 52.52, lng: 13.405}
+spreadKm: 5.0
+mix:
+  normal: 0.4
+  speeding: 0.2
+  idling: 0.2
+  offline: 0.2
+faults:
+  duplicateRate: 0.02
+  outOfOrderRate: 0.02

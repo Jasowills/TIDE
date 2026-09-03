@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: tide
+      POSTGRES_PASSWORD: tide
+      POSTGRES_DB: tide
+    ports:
+      - "${TIDE_PG_PORT:-5432}:5432"
+    volumes:
+      - tide-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tide"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    command: "-js -m 8222"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/varz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./deployments/docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t tide/health -m ok || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  tide-api:
+    build: .
+    command: ["/usr/local/bin/tide-api", "-config", "/etc/tide/tide.yaml"]
+    ports:
+      - "8080:8080"
+    environment:
+      TIDE_POSTGRES_DSN: "postgres://tide:tide@postgres:5432/tide?sslmode=disable"
+      TIDE_REDIS_ADDR: "redis:6379"
+      TIDE_NATS_URL: "nats://nats:4222"
+    volumes:
+      - ./tide.docker.yaml:/etc/tide/tide.yaml:ro
+      - ./rules:/rules:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  tide-engine:
+    build: .
+    command: ["/usr/local/bin/tide-engine", "-config", "/etc/tide/tide.yaml"]
+    ports:
+      - "8081:8081"
+    environment:
+      TIDE_POSTGRES_DSN: "postgres://tide:tide@postgres:5432/tide?sslmode=disable"
+      TIDE_REDIS_ADDR: "redis:6379"
+      TIDE_NATS_URL: "nats://nats:4222"
+    volumes:
+      - ./tide.docker.yaml:/etc/tide/tide.yaml:ro
+      - ./rules:/rules:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  console:
+    build: ./apps/console
+    ports:
+      - "5173:5173"
+    depends_on:
+      - tide-api
+
+volumes:
+  tide-pg:

@@ -1,0 +1,16 @@
+# Generic MQTT device mapping (T021): zero Go code to onboard a tracker.
+broker: tcp://mosquitto:1883
+topics: ["fleet/+/telemetry"]
+defaults:
+  tenant: default
+  provider: generic-mqtt
+fields:
+  vehicleId: device.id
+  lat: gps.lat
+  lng: gps.lon
+  speed: gps.speed
+  ignition: ignition
+  timestamp: ts
+  sequence: seq
+speedUnit: kmh
+topicVehicleIndex: 1
