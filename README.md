@@ -13,8 +13,9 @@ simulation**.
 
 > V1 targets developers and integrators building *on top of* telemetry. It is
 > not a Samsara replacement — there is no fleet-ops UI beyond a
-> debugging/demo console. See [docs/contributing.md](docs/contributing.md) for
-> scope discipline.
+> debugging/demo console. Out of scope for V1: dispatch, payroll, driver HR,
+> ELD, route optimization, navigation, fuel cards, insurance, remote engine
+> control, predictive ML, AI assistant. Do not build Samsara.
 
 ## 60-second demo (zero cloud accounts, zero API keys)
 
@@ -62,24 +63,16 @@ simulator/{scenarios,generators,faults}/   FleetSim
 apps/console/                              React+TS debug console (7 screens)
 sdk/typescript/                            typed client
 deployments/docker/  benchmarks/  tests/   ops, repro scripts, chaos suite
-docs/  rules/  examples/  openapi.yaml     guides, sample rules, consumer example
+rules/  examples/  openapi.yaml          sample rules, consumer example, API contract
 ```
 
 ## Docs
 
-Start with [docs/quickstart.md](docs/quickstart.md), then
-[architecture](docs/architecture.md) ·
-[telemetry](docs/telemetry.md) ·
-[events](docs/events.md) ·
-[rules](docs/rules.md) ·
-[replay](docs/replay.md) ·
-[fleetsim](docs/fleetsim.md) ·
-[adapters](docs/adapters.md) ·
-[api](docs/api.md) (+ [openapi.yaml](openapi.yaml)) ·
-[ops](docs/ops.md) ·
-[security](docs/security.md) ·
-[benchmarks](docs/benchmarks.md) ·
-[contributing](docs/contributing.md).
+Full guides lived in `docs/` (quickstart, architecture, telemetry, events,
+rules, replay, FleetSim, adapters, API, ops, security, benchmarks,
+contributing) — removed from the tree; recover any page from git history.
+The contract sources of truth remain: `schemas/`, `rules/`, `openapi.yaml`,
+`owasp-coverage.md`.
 
 Every claimed number ships with a reproduction script
 ([benchmarks/run.sh](benchmarks/run.sh)) — no unverified figures, ever.
