@@ -4,3 +4,12 @@
 [[IgnoredVulns]]
 id = "GO-2026-5932"
 reason = "golang.org/x/crypto/openpgp deprecation advisory: no fixed version exists (fix = do not use openpgp). Verified 2026-09-04: openpgp is NOT in our build graph (go list -deps shows zero openpgp packages; x/crypto is pulled transitively by pgx/nats for scram/nacl only). Non-reachable by construction."
+[[IgnoredVulns]]
+id = "CVE-2026-56876"
+reason = "extract-zip@2.0.1 (dev-only, via @lhci/cli -> @puppeteer/browsers): no fixed version published. Reachable only when extracting Google-CDN browser archives during `npm ci` postinstall; LHCI audits our own console, never untrusted input. Re-check on every @lhci/cli upgrade; moving lighthouse past 0.15.1's tree is not currently viable."
+[[IgnoredVulns]]
+id = "CVE-2026-41907"
+reason = "uuid@8.3.2 (GHSA-w5hq-g745-h8pq; dev-only, direct dep of @lhci/cli for local report IDs). Only fix is 11.x which is ESM-only and breaks @lhci/cli's CJS require() — upgrading kills the audit tool it is meant to protect. No untrusted input reaches it. Re-check on @lhci/cli upgrade."
+[[IgnoredVulns]]
+id = "CVE-2026-41988"
+reason = "Same uuid@8.3.2 advisory, second alias (GHSA-w5hq-g745-h8pq). Same justification as CVE-2026-41907."
