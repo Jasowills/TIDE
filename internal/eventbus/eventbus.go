@@ -36,6 +36,14 @@ func (m *MemoryBus) Reset() {
 	m.Events = nil
 }
 
+// Snapshot returns a copy for readers (HTTP handlers). Ranging over .Events
+// directly while Publish appends is a fatal concurrent-map-style race.
+func (m *MemoryBus) Snapshot() []events.Event {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]events.Event{}, m.Events...)
+}
+
 type NATSBus struct {
 	nc *nats.Conn
 }
