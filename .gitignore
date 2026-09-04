@@ -6,5 +6,8 @@
 node_modules/
 apps/console/dist/
 apps/console/lhci-reports/
+apps/console/.lighthouseci/
+apps/console/e2e/screenshots/
+apps/console/test-results/
 benchmarks/last.txt
 apps/console/.lighthouseci/

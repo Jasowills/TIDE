@@ -5,7 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/v1': 'http://localhost:8080',
+      // Object form with explicit ws:true — the live event stream (/v1/stream)
+      // upgrades through this proxy; the string shorthand leaves websocket
+      // support to defaults, which silently drops the stream.
+      '/v1': { target: 'http://localhost:8080', changeOrigin: true, ws: true },
     },
   },
 });

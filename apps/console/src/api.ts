@@ -89,13 +89,40 @@ export async function fetchTriggers(): Promise<RuleTrigger[]> {
 
 export function streamEvents(onEvent: (e: TideEvent) => void): () => void {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/v1/stream`);
-  ws.onmessage = (m) => {
-    try {
-      onEvent(JSON.parse(m.data));
-    } catch {
-      /* keep-alive noise: ignore, never crash the stream */
-    }
+  const url = `${proto}://${location.host}/v1/stream`;
+  let closed = false;
+  let attempts = 0;
+  let ws: WebSocket | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  // A silent dead stream is the worst outcome for a live dashboard: reconnect
+  // with backoff so a proxy/API restart heals without a page reload.
+  function connect() {
+    if (closed) return;
+    ws = new WebSocket(url);
+    ws.onmessage = (m) => {
+      try {
+        onEvent(JSON.parse(m.data));
+      } catch {
+        /* keep-alive noise: ignore, never crash the stream */
+      }
+    };
+    ws.onopen = () => {
+      attempts = 0;
+    };
+    ws.onclose = () => {
+      if (closed || attempts >= 5) return;
+      attempts += 1;
+      timer = setTimeout(connect, Math.min(1000 * 2 ** attempts, 15000));
+    };
+    ws.onerror = () => {
+      ws?.close();
+    };
+  }
+  connect();
+  return () => {
+    closed = true;
+    if (timer) clearTimeout(timer);
+    ws?.close();
   };
-  return () => ws.close();
 }

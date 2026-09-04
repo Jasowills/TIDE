@@ -107,7 +107,8 @@ func (t *Tracker) Evaluate(ctx context.Context, tel ctelemetry.Telemetry) []even
 				ID: events.DeterministicID("vehicle.geofence.entered", tel.VehicleID, tel.Timestamp, g.ID),
 				Type: "vehicle.geofence.entered", TenantID: tel.TenantID, VehicleID: tel.VehicleID,
 				Timestamp: tel.Timestamp, CorrelationID: tel.Metadata.CorrelationID, CausationID: tel.ID,
-				Payload: map[string]any{"geofenceId": g.ID, "geofenceName": g.Name},
+				Payload: map[string]any{"geofenceId": g.ID, "geofenceName": g.Name,
+				"lat": tel.Location.Lat, "lng": tel.Location.Lng},
 				SchemaVersion: events.CurrentSchemaVersion,
 			})
 		} else if !inside && was {
@@ -144,7 +145,8 @@ func exitEvent(tel ctelemetry.Telemetry, g Geofence) events.Event {
 		ID: events.DeterministicID("vehicle.geofence.exited", tel.VehicleID, tel.Timestamp, g.ID),
 		Type: "vehicle.geofence.exited", TenantID: tel.TenantID, VehicleID: tel.VehicleID,
 		Timestamp: tel.Timestamp, CorrelationID: tel.Metadata.CorrelationID, CausationID: tel.ID,
-		Payload: map[string]any{"geofenceId": g.ID, "geofenceName": g.Name},
+		Payload: map[string]any{"geofenceId": g.ID, "geofenceName": g.Name,
+			"lat": tel.Location.Lat, "lng": tel.Location.Lng},
 		SchemaVersion: events.CurrentSchemaVersion,
 	}
 }

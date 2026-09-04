@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TideEvent, VehicleState, fetchEvents, fetchState } from '../api';
 
 // T102 Vehicle detail — state, identity, event + raw telemetry history with
@@ -18,6 +18,13 @@ export function VehicleDetail({ tenant }: { tenant: string }) {
       setErr(String(e));
     }
   }
+
+  // Load on mount and when the id/tenant changes — an empty detail screen
+  // with a Load button nobody clicks is a dead screen.
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, tenant]);
 
   return (
     <div>
