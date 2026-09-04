@@ -70,11 +70,14 @@ jobs:
           sleep 12
           curl -sf http://localhost:8080/healthz
       - name: ZAP baseline scan
-        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           target: 'http://localhost:8080'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          # No auto-filed issues: findings live in the uploaded report artifact
+          # (reviewed per run); issues are opened deliberately by humans.
+          issue_title: ''
       - name: Upload ZAP report
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
