@@ -58,7 +58,9 @@ func TestRuleFiresAndTraces(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec.Then.Webhook = srv.URL
-	eng := NewEngine(webhooks.NewDispatcher())
+	disp := webhooks.NewDispatcher()
+	disp.AllowPrivate = true // httptest serves loopback
+	eng := NewEngine(disp)
 	eng.Dispatcher.BaseDelay = time.Millisecond
 	if err := eng.Publish(spec, time.Now()); err != nil {
 		t.Fatal(err)

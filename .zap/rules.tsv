@@ -1,0 +1,2 @@
+# Local-dev plaintext HSTS has no meaning — ignore with justification, keep the gate.
+10096	IGNORE	HSTS header is TLS-only; compose API is local-dev plaintext

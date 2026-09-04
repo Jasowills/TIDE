@@ -37,6 +37,16 @@ type Bundle struct {
 	NATSUp   bool
 }
 
+// newDispatcher honors TIDE_WEBHOOK_ALLOW_PRIVATE=1 for dev/test loops that
+// point webhooks at loopback. Production default is deny-private (A01).
+func newDispatcher() *webhooks.Dispatcher {
+	d := webhooks.NewDispatcher()
+	if os.Getenv("TIDE_WEBHOOK_ALLOW_PRIVATE") == "1" {
+		d.AllowPrivate = true
+	}
+	return d
+}
+
 // DefaultSpeedingRule ships in V1: speeding.started → incident.created.
 // Webhook attaches only when TIDE_DEFAULT_WEBHOOK is set.
 const DefaultSpeedingRule = `
@@ -96,7 +106,7 @@ func Build(ctx context.Context, cfg config.Config) *Bundle {
 		log.Printf("boot: nats at %s", cfg.NATS.URL)
 	}
 
-	eng := rules.NewEngine(webhooks.NewDispatcher())
+	eng := rules.NewEngine(newDispatcher())
 	if spec, err := rules.ParseSpec([]byte(DefaultSpeedingRule)); err == nil {
 		if url := os.Getenv("TIDE_DEFAULT_WEBHOOK"); url != "" {
 			spec.Then.Webhook = url

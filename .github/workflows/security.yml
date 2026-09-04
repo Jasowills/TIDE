@@ -1,0 +1,80 @@
+name: security
+
+# Five layers (OWASP Top 10 2025): secrets → supply chain → SAST → DAST → custom
+# negative-path tests (the Go suite: SSRF, headers, rate-limit, error contract,
+# tenant isolation). OSV + Semgrep + TruffleHog + `go test` gate the merge;
+# ZAP uploads its report as an artifact on every run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          fetch-depth: 0
+      - name: TruffleHog (verified secrets only)
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # main # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          extra_args: --only-verified
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          go-version: "1.27"
+      - name: OSV-Scanner (fails on any vulnerability)
+        uses: google/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          scan-args: --recursive ./
+
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - name: Semgrep p/owasp-top-ten (gate)
+        run: |
+          pip install --quiet semgrep
+          semgrep --config p/owasp-top-ten --error \
+            --exclude node_modules --exclude dist --exclude '*.test.*' .
+
+  custom-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          go-version: "1.27"
+      - name: Negative-path security tests
+        run: go test ./internal/webhooks/ ./internal/api/ ./internal/rules/ ./internal/store/ ./internal/boot/
+
+  dast:
+    runs-on: ubuntu-latest
+    needs: [secrets, supply-chain, sast, custom-tests]
+    steps:
+      - uses: actions/checkout@11bd5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - name: Bring up API
+        run: |
+          docker compose up -d --build postgres redis nats tide-api tide-engine
+          sleep 12
+          curl -sf http://localhost:8080/healthz
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        with:
+          name: zap-report
+          path: report_html.html
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

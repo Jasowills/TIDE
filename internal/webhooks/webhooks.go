@@ -7,12 +7,13 @@ package webhooks
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"strconv"
 	"sync"
@@ -67,10 +68,13 @@ type Delivery struct {
 }
 
 // Dispatcher delivers with retry+backoff+jitter and a dead-letter queue.
+// AllowPrivate lifts the SSRF private-net block for tests/dev only —
+// production must leave it false (default).
 type Dispatcher struct {
-	Client     *http.Client
-	MaxRetries int
-	BaseDelay  time.Duration
+	Client       *http.Client
+	MaxRetries   int
+	BaseDelay    time.Duration
+	AllowPrivate bool
 
 	mu       sync.Mutex
 	Delivered []Delivery
@@ -93,6 +97,13 @@ func (d *Dispatcher) Dispatch(url, secret string, e events.Event) error {
 	if err != nil {
 		return err
 	}
+	// SSRF gate BEFORE any byte is sent: blocked targets dead-letter
+	// immediately, with zero requests emitted (A01).
+	if err := ValidateURL(url, d.AllowPrivate); err != nil {
+		d.record(false, url, e.ID, 0, err.Error())
+		return err
+	}
+	client := d.guardedClient(d.AllowPrivate)
 	now := time.Now().UTC()
 	sig, ts := Sign(secret, e.ID, now, body)
 	delay := d.BaseDelay
@@ -107,7 +118,7 @@ func (d *Dispatcher) Dispatch(url, secret string, e events.Event) error {
 		req.Header.Set(HeaderEventID, e.ID)
 		req.Header.Set(HeaderTimestamp, ts)
 		req.Header.Set(HeaderSignature, sig)
-		resp, err := d.Client.Do(req)
+		resp, err := client.Do(req)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
@@ -123,7 +134,7 @@ func (d *Dispatcher) Dispatch(url, secret string, e events.Event) error {
 		} else {
 			lastErr = err
 		}
-		time.Sleep(delay + time.Duration(rand.Int63n(int64(delay)))) // backoff+jitter
+		time.Sleep(delay + jitter(delay)) // crypto-random backoff+jitter
 		delay *= 2
 		if delay > 10*time.Second {
 			delay = 10 * time.Second
@@ -131,6 +142,18 @@ func (d *Dispatcher) Dispatch(url, secret string, e events.Event) error {
 	}
 	d.record(false, url, e.ID, 0, lastErr.Error())
 	return fmt.Errorf("webhook: dead-lettered after %d retries: %w", d.MaxRetries, lastErr)
+}
+
+// jitter returns [0,n) from crypto randomness — backoff jitter only.
+func jitter(n time.Duration) time.Duration {
+	if n <= 0 {
+		return 0
+	}
+	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(v.Int64())
 }
 
 func (d *Dispatcher) record(ok bool, url, id string, status int, errStr string) {

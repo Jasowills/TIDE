@@ -4,7 +4,7 @@
 package faults
 
 import (
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seeded determinism is REQUIRED: same seed must reproduce identical faults for replay tests (Architecture §2.9)
 	"time"
 
 	ctelemetry "github.com/tide-telematics/tide/schemas/telemetry"

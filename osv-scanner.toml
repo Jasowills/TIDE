@@ -1,0 +1,6 @@
+# OSV-Scanner policy. The gate (security.yml) fails on any UNLISTED finding.
+# Entries below are accepted risks with justification + review date — never
+# silent. Re-check each entry monthly; remove the moment a fix ships.
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "golang.org/x/crypto/openpgp deprecation advisory: no fixed version exists (fix = do not use openpgp). Verified 2026-09-04: openpgp is NOT in our build graph (go list -deps shows zero openpgp packages; x/crypto is pulled transitively by pgx/nats for scram/nacl only). Non-reachable by construction."

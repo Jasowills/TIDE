@@ -5,8 +5,9 @@ package mqtt
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"sync"
 	"time"
 
@@ -28,6 +29,19 @@ type Adapter struct {
 
 func New(cfg MappingConfig, emit func(ctx context.Context, t ctelemetry.Telemetry) error) *Adapter {
 	return &Adapter{cfg: cfg, emit: emit, state: adapters.StateConfigured}
+}
+
+// jitter returns [0,n) from crypto randomness — backoff jitter only, never
+// secrets or determinism-sensitive output (hence no math/rand here).
+func jitter(n time.Duration) time.Duration {
+	if n <= 0 {
+		return 0
+	}
+	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(v.Int64())
 }
 
 func (a *Adapter) setState(s adapters.HealthState, msg string) {
@@ -53,7 +67,7 @@ func (a *Adapter) Connect(ctx context.Context) error {
 		case <-ctx.Done():
 			a.setState(adapters.StateFailed, ctx.Err().Error())
 			return ctx.Err()
-		case <-time.After(backoff + time.Duration(rand.Int63n(int64(backoff)))):
+		case <-time.After(backoff + jitter(backoff)):
 		}
 		backoff *= 2
 		if backoff > 30*time.Second {

@@ -47,6 +47,7 @@ func TestRetryThenDeliver(t *testing.T) {
 	}))
 	defer srv.Close()
 	d := NewDispatcher()
+	d.AllowPrivate = true // httptest serves loopback
 	d.BaseDelay = time.Millisecond
 	if err := d.Dispatch(srv.URL, "s", evt("e1")); err != nil {
 		t.Fatalf("dispatch: %v", err)
@@ -63,6 +64,7 @@ func TestDeadLetter(t *testing.T) {
 	}))
 	defer srv.Close()
 	d := NewDispatcher()
+	d.AllowPrivate = true // httptest serves loopback
 	d.MaxRetries = 2
 	d.BaseDelay = time.Millisecond
 	start := time.Now()

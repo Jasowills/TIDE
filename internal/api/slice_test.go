@@ -41,7 +41,9 @@ func TestVerticalSlice(t *testing.T) {
 	defer consumer.Close()
 
 	bus := &eventbus.MemoryBus{}
-	eng := rules.NewEngine(webhooks.NewDispatcher())
+	disp := webhooks.NewDispatcher()
+	disp.AllowPrivate = true // test consumer is loopback
+	eng := rules.NewEngine(disp)
 	eng.Dispatcher.BaseDelay = time.Millisecond
 	spec, err := rules.ParseSpec([]byte(`
 id: speeding-alert

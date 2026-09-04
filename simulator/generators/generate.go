@@ -7,7 +7,7 @@ package generators
 import (
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seeded determinism is REQUIRED: same scenario+seed must emit identical points (Architecture §2.9)
 	"time"
 
 	ctelemetry "github.com/tide-telematics/tide/schemas/telemetry"

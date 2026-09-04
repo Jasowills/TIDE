@@ -34,6 +34,7 @@ type Deps struct {
 	Geofences *GeofenceStore
 	Rules     *rules.Engine
 	Registry  *AdapterRegistry
+	Limiter   *RateLimiter // nil → New() installs the default 600/min budget
 }
 
 // AdapterRegistry tracks adapter health heartbeats (engine publishes on
@@ -144,15 +145,20 @@ func (h *Hub) Broadcast(e events.Event) {
 }
 
 type Server struct {
-	deps Deps
-	hub  *Hub
-	mux  *http.ServeMux
+	deps    Deps
+	hub     *Hub
+	mux     *http.ServeMux
+	handler http.Handler
 }
 
 func New(d Deps) *Server {
 	s := &Server{deps: d, hub: &Hub{}, mux: http.NewServeMux()}
 	if s.deps.Registry == nil {
 		s.deps.Registry = NewAdapterRegistry()
+	}
+	if s.deps.Limiter == nil {
+		// Generous production default: abuse throttled, normal use untouched.
+		s.deps.Limiter = NewRateLimiter(600, time.Minute)
 	}
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		_, span := otel.Tracer("tide/api").Start(r.Context(), "healthz")
@@ -162,18 +168,19 @@ func New(d Deps) *Server {
 	s.mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ready"))
 	})
-	s.mux.HandleFunc("/v1/telemetry", s.handleIngest)
-	s.mux.HandleFunc("/v1/telemetry:batch", s.handleIngest)
+	s.mux.HandleFunc("/v1/telemetry", s.deps.Limiter.middleware(http.HandlerFunc(s.handleIngest)).ServeHTTP)
+	s.mux.HandleFunc("/v1/telemetry:batch", s.deps.Limiter.middleware(http.HandlerFunc(s.handleIngest)).ServeHTTP)
 	s.mux.HandleFunc("/v1/events", s.handleEvents)
 	s.mux.HandleFunc("/v1/vehicles/", s.handleVehicle)
 	s.mux.HandleFunc("/v1/geofences", s.handleGeofences)
 	s.mux.HandleFunc("/v1/rules/triggers", s.handleTriggers)
 	s.mux.HandleFunc("/v1/connections", s.handleConnections)
 	s.mux.HandleFunc("/v1/stream", s.handleStream)
+	s.handler = securityHeaders(denyTrace(s.mux))
 	return s
 }
 
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -218,7 +225,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 		evs, err := s.deps.Pipeline.Process(ctx, t)
 		if err != nil {
-			http.Error(w, "processing failed: "+err.Error(), http.StatusInternalServerError)
+			internalError(w, err)
 			return
 		}
 		accepted++
@@ -248,7 +255,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		var err error
 		out, err = s.deps.PG.RecentEvents(ctx, tenant, vehicle, typ, 100)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			internalError(w, err)
 			return
 		}
 	} else if s.deps.Bus != nil {
@@ -282,7 +289,7 @@ func (s *Server) handleVehicle(w http.ResponseWriter, r *http.Request) {
 	}
 	st, ok, err := s.deps.States.Get(r.Context(), parts[0])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalError(w, err)
 		return
 	}
 	if !ok {
