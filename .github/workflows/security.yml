@@ -82,7 +82,7 @@ jobs:
           cmd_options: '-a'
       - name: Upload ZAP report
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
         with:
           name: zap-report
           path: report_html.html
