@@ -43,7 +43,7 @@ jobs:
           BASE_URL: http://localhost:8080
       - name: Upload k6 summaries
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           name: k6-summaries
           path: '*-summary.json'
@@ -69,7 +69,7 @@ jobs:
       - run: npx lhci autorun --config=lighthouserc.cjs
       - name: Upload LHCI reports
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           name: lhci-reports
           path: apps/console/lhci-reports
