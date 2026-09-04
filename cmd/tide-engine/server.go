@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tide-telematics/tide/adapters/registry"
 	"github.com/tide-telematics/tide/internal/boot"
 	"github.com/tide-telematics/tide/internal/config"
 	"github.com/tide-telematics/tide/internal/observability"
@@ -27,10 +28,12 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 
 	// Upstream adapters, env-configured (TIDE_MQTT_BROKER, TIDE_TRACCAR_URL…).
 	// Each runs its own connect/subscribe loop; health flows to Connections.
-	adapters := configuredAdapters(b)
-	log.Printf("engine: %d adapter(s) configured", len(adapters))
-	for _, a := range adapters {
-		go a.run(ctx, b)
+	// Wiring lives in adapters/registry so provider names never appear in
+	// engine code (provider-isolation lint).
+	regs := registry.Configure(b.Pipeline)
+	log.Printf("engine: %d adapter(s) configured", len(regs))
+	for _, a := range regs {
+		go a.Run(ctx)
 	}
 
 	// Offline sweeper: presence transitions for silent devices.
@@ -43,7 +46,7 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 				return
 			case now := <-t.C:
 				sweep(ctx, b, now)
-				heartbeat(ctx, b, now, adapters)
+				heartbeat(ctx, b, now, regs)
 			}
 		}
 	}()
@@ -87,7 +90,7 @@ func sweep(ctx context.Context, b *boot.Bundle, now time.Time) {
 	}
 }
 
-func heartbeat(ctx context.Context, b *boot.Bundle, now time.Time, regs []*runningAdapter) {
+func heartbeat(ctx context.Context, b *boot.Bundle, now time.Time, regs []*registry.Adapter) {
 	_ = b.Pipeline.Bus.Publish(ctx, events.Event{
 		ID: "hb-tide-engine", Type: "tide.heartbeat.created",
 		TenantID: "system", VehicleID: "tide-engine", Timestamp: now,
@@ -95,5 +98,5 @@ func heartbeat(ctx context.Context, b *boot.Bundle, now time.Time, regs []*runni
 		Payload: map[string]any{"name": "tide-engine", "state": "HEALTHY"},
 		SchemaVersion: events.CurrentSchemaVersion,
 	})
-	heartbeatAdapters(ctx, b, now, regs)
+	registry.Heartbeats(ctx, now, regs, b.Pipeline.Bus.Publish)
 }
