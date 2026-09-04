@@ -140,6 +140,11 @@ func ruleFiles() []string {
 	return append(matches, matches2...)
 }
 
+// telemetryStore is the durable write path (*store.PG in prod; stubbed in tests).
+type telemetryStore interface {
+	AppendTelemetry(ctx context.Context, t ctelemetry.Telemetry) error
+}
+
 // pgLog dual-writes durable telemetry when PG is up; else memory.
 func logSink(pg *store.PG) pipeline.TelemetryLog {
 	if pg == nil {
@@ -149,13 +154,18 @@ func logSink(pg *store.PG) pipeline.TelemetryLog {
 }
 
 type pgLog struct {
-	pg  *store.PG
+	pg  telemetryStore
 	mem *pipeline.MemoryLog
 }
 
 func (l *pgLog) Append(ctx context.Context, t ctelemetry.Telemetry) error {
 	_ = l.mem.Append(ctx, t)
-	return l.pg.AppendTelemetry(ctx, t)
+	// §2.10: Postgres down must not kill ingestion — buffer (memory) with a
+	// hard cap and continue; the error is logged, not returned.
+	if err := l.pg.AppendTelemetry(ctx, t); err != nil {
+		log.Printf("boot: postgres append failed, buffered in memory: %v", err)
+	}
+	return nil
 }
 
 func (l *pgLog) All() []ctelemetry.Telemetry { return l.mem.All }
