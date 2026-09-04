@@ -1,8 +1,8 @@
-tide
-tide-api
-tide-engine
-tide-sim
-.env
+/tide
+/tide-api
+/tide-engine
+/tide-sim
+/.env
 node_modules/
 apps/console/dist/
 benchmarks/last.txt

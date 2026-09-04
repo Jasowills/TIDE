@@ -34,5 +34,5 @@ jobs:
           curl -sf http://localhost:8080/healthz
           curl -sf http://localhost:8081/healthz
           docker compose run --rm tide-api /usr/local/bin/tide simulate --vehicles 10 --scenario mixed --api http://tide-api:8080
-          docker compose run --rm tide-api /usr/local/bin/tide doctor
+          docker compose run --rm -e TIDE_POSTGRES_DSN=postgres://tide:tide@postgres:5432/tide?sslmode=disable -e TIDE_REDIS_ADDR=redis:6379 -e TIDE_NATS_URL=nats://nats:4222 tide-api /usr/local/bin/tide doctor
           docker compose down -v
