@@ -149,10 +149,11 @@ type Server struct {
 	hub     *Hub
 	mux     *http.ServeMux
 	handler http.Handler
+	sims    *simRegistry
 }
 
 func New(d Deps) *Server {
-	s := &Server{deps: d, hub: &Hub{}, mux: http.NewServeMux()}
+	s := &Server{deps: d, hub: &Hub{}, mux: http.NewServeMux(), sims: newSimRegistry()}
 	if s.deps.Registry == nil {
 		s.deps.Registry = NewAdapterRegistry()
 	}
@@ -175,6 +176,8 @@ func New(d Deps) *Server {
 	s.mux.HandleFunc("/v1/geofences", s.handleGeofences)
 	s.mux.HandleFunc("/v1/rules/triggers", s.handleTriggers)
 	s.mux.HandleFunc("/v1/connections", s.handleConnections)
+	s.mux.HandleFunc("/v1/simulate", s.deps.Limiter.middleware(http.HandlerFunc(s.handleSimulate)).ServeHTTP)
+	s.mux.HandleFunc("/v1/simulate/", s.handleSimStatus)
 	s.mux.HandleFunc("/v1/stream", s.handleStream)
 	s.handler = securityHeaders(denyTrace(s.mux))
 	return s

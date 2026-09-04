@@ -22,11 +22,11 @@ export function EventExplorer({ tenant }: { tenant: string }) {
       <div style={{ flex: 1 }}>
         <h2>Event explorer ({shown.length})</h2>
         <input placeholder="filter type/vehicle" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <ul>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
           {shown.slice(0, 100).map((e) => (
-            <li key={e.id}>
-              <button onClick={() => setSelected(e)}>
-                {e.type} · {e.vehicleId}
+            <li key={e.id} style={{ borderLeft: `4px solid ${severityColor(e.type)}`, marginBottom: 2, paddingLeft: 6 }}>
+              <button onClick={() => setSelected(e)} title={e.id}>
+                <span style={{ color: '#888' }}>{timeOf(e.timestamp)}</span> {e.type} · {e.vehicleId}
               </button>
             </li>
           ))}
@@ -42,4 +42,17 @@ export function EventExplorer({ tenant }: { tenant: string }) {
       </div>
     </div>
   );
+}
+
+// Severity tint so the eye lands on incidents first in a fast-scrolling wall.
+function severityColor(type: string): string {
+  if (type.startsWith('incident.')) return '#c0392b';
+  if (type.endsWith('.started') || type.endsWith('.entered')) return '#e67e22';
+  if (type.endsWith('.ended') || type.endsWith('.exited')) return '#27ae60';
+  return '#555';
+}
+
+function timeOf(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString();
 }

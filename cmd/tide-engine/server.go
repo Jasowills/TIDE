@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/tide-telematics/tide/adapters/registry"
 	"github.com/tide-telematics/tide/internal/boot"
 	"github.com/tide-telematics/tide/internal/config"
 	"github.com/tide-telematics/tide/internal/observability"
 	"github.com/tide-telematics/tide/internal/state"
-	mqttadapter "github.com/tide-telematics/tide/adapters/mqtt"
-	ctelemetry "github.com/tide-telematics/tide/schemas/telemetry"
 	"github.com/tide-telematics/tide/schemas/events"
 )
 
@@ -28,6 +26,16 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 
 	b := boot.Build(ctx, cfg)
 
+	// Upstream adapters, env-configured (TIDE_MQTT_BROKER, TIDE_TRACCAR_URL…).
+	// Each runs its own connect/subscribe loop; health flows to Connections.
+	// Wiring lives in adapters/registry so provider names never appear in
+	// engine code (provider-isolation lint).
+	regs := registry.Configure(b.Pipeline)
+	log.Printf("engine: %d adapter(s) configured", len(regs))
+	for _, a := range regs {
+		go a.Run(ctx)
+	}
+
 	// Offline sweeper: presence transitions for silent devices.
 	go func() {
 		t := time.NewTicker(30 * time.Second)
@@ -38,15 +46,10 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 				return
 			case now := <-t.C:
 				sweep(ctx, b, now)
-				heartbeat(ctx, b, now)
+				heartbeat(ctx, b, now, regs)
 			}
 		}
 	}()
-
-	// MQTT live path (optional in V1: TIDE_MQTT_BROKER + TIDE_MQTT_MAPPING).
-	if broker := os.Getenv("TIDE_MQTT_BROKER"); broker != "" {
-		go runMQTT(ctx, b, cfg, broker)
-	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
@@ -87,54 +90,13 @@ func sweep(ctx context.Context, b *boot.Bundle, now time.Time) {
 	}
 }
 
-func heartbeat(ctx context.Context, b *boot.Bundle, now time.Time) {
-	mqttState := "CONFIGURED"
-	if os.Getenv("TIDE_MQTT_BROKER") != "" {
-		mqttState = "HEALTHY"
-	}
-	for name, st := range map[string]string{"tide-engine": "HEALTHY", "mqtt": mqttState} {
-		_ = b.Pipeline.Bus.Publish(ctx, events.Event{
-			ID: "hb-" + name, Type: "tide.heartbeat.created",
-			TenantID: "system", VehicleID: name, Timestamp: now,
-			CorrelationID: "hb",
-			Payload: map[string]any{"name": name, "state": st},
-			SchemaVersion: events.CurrentSchemaVersion,
-		})
-	}
-}
-
-func runMQTT(ctx context.Context, b *boot.Bundle, cfg config.Config, broker string) {
-	mapPath := os.Getenv("TIDE_MQTT_MAPPING")
-	if mapPath == "" {
-		mapPath = "examples/mqtt-mapping.yaml"
-	}
-	raw, err := os.ReadFile(mapPath)
-	if err != nil {
-		log.Printf("engine: mqtt mapping missing (%v) — subscriber off", err)
-		return
-	}
-	mc, err := mqttadapter.LoadMapping(raw)
-	if err != nil {
-		log.Printf("engine: bad mqtt mapping: %v", err)
-		return
-	}
-	mc.Broker = broker
-	a := mqttadapter.New(mc, func(c context.Context, t ctelemetry.Telemetry) error {
-		_, err := b.Pipeline.Process(c, t)
-		return err
+func heartbeat(ctx context.Context, b *boot.Bundle, now time.Time, regs []*registry.Adapter) {
+	_ = b.Pipeline.Bus.Publish(ctx, events.Event{
+		ID: "hb-tide-engine", Type: "tide.heartbeat.created",
+		TenantID: "system", VehicleID: "tide-engine", Timestamp: now,
+		CorrelationID: "hb",
+		Payload: map[string]any{"name": "tide-engine", "state": "HEALTHY"},
+		SchemaVersion: events.CurrentSchemaVersion,
 	})
-	if err := a.Connect(ctx); err != nil {
-		log.Printf("engine: mqtt connect: %v", err)
-		return
-	}
-	defer func() { _ = a.Disconnect(context.Background()) }()
-	err = a.Subscribe(ctx, func(c context.Context, topic string, payload []byte) error {
-		return a.HandleRaw(c, topic, payload)
-	})
-	if err != nil {
-		log.Printf("engine: mqtt subscribe: %v", err)
-		return
-	}
-	log.Printf("engine: mqtt subscribed to %v", mc.Topics)
-	<-ctx.Done()
+	registry.Heartbeats(ctx, now, regs, b.Pipeline.Bus.Publish)
 }

@@ -37,12 +37,24 @@ export function LiveMap({ tenant }: { tenant: string }) {
     <div>
       <h2>Live map ({pts.length} vehicles)</h2>
       <svg width={800} height={420} style={{ border: '1px solid #444' }}>
-        {pts.map(([id, p]) => (
-          <g key={id}>
-            <circle cx={X(p.lng)} cy={Y(p.lat)} r={5} fill="#4da3ff" />
-            <text x={X(p.lng) + 7} y={Y(p.lat) + 4} fontSize={10} fill="#ccc">{id}</text>
-          </g>
-        ))}
+        {pts.map(([id, p]) => {
+          // Flip labels that would clip off the right edge.
+          const flip = X(p.lng) > 700;
+          return (
+            <g key={id}>
+              <circle cx={X(p.lng)} cy={Y(p.lat)} r={5} fill="#4da3ff" />
+              <text
+                x={X(p.lng) + (flip ? -7 : 7)}
+                y={Y(p.lat) + 4}
+                fontSize={10}
+                fill="#ccc"
+                textAnchor={flip ? 'end' : 'start'}
+              >
+                {id}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

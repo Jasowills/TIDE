@@ -92,6 +92,14 @@ func (tr *Tracker) Detect(t ctelemetry.Telemetry, s state.VehicleState) []events
 }
 
 func mkEvent(typ string, t ctelemetry.Telemetry, cause string, payload map[string]any) events.Event {
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	// Every event carries the position that caused it — the live map and any
+	// consumer can place the vehicle without a second lookup. Deterministic:
+	// same input yields byte-identical payloads; event IDs are unaffected.
+	payload["lat"] = t.Location.Lat
+	payload["lng"] = t.Location.Lng
 	return events.Event{
 		ID:            events.DeterministicID(typ, t.VehicleID, t.Timestamp, cause),
 		Type:          typ,

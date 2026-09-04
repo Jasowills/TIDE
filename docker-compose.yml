@@ -82,9 +82,15 @@ services:
       TIDE_POSTGRES_DSN: "postgres://tide:tide@postgres:5432/tide?sslmode=disable"
       TIDE_REDIS_ADDR: "redis:6379"
       TIDE_NATS_URL: "nats://nats:4222"
+      # Live MQTT ingestion (generic tracker mapping). The engine subscribes
+      # on boot; health + throughput surface in Connections.
+      TIDE_MQTT_BROKER: "tcp://mosquitto:1883"
+      TIDE_MQTT_MAPPING: "/etc/tide/mqtt-mapping.yaml"
+      TIDE_TENANT: "default"
     volumes:
       - ./tide.docker.yaml:/etc/tide/tide.yaml:ro
       - ./rules:/rules:ro
+      - ./examples/mqtt-mapping.yaml:/etc/tide/mqtt-mapping.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -18,7 +18,10 @@ export function Overview({ tenant }: { tenant: string }) {
   const byType = new Map<string, number>();
   for (const e of events) byType.set(e.type, (byType.get(e.type) ?? 0) + 1);
   const incidents = events.filter((e) => e.type.startsWith('incident.')).length;
-  const degraded = conns.filter((c) => c.state !== 'HEALTHY');
+  // CONFIGURED means "not wired up" — not degradation. Only unexpected states
+  // alarm: a dashboard that cries wolf about optional adapters gets ignored
+  // when a real one fails.
+  const degraded = conns.filter((c) => c.state !== 'HEALTHY' && c.state !== 'CONFIGURED');
 
   return (
     <div>
