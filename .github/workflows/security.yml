@@ -29,9 +29,15 @@ jobs:
         with:
           go-version: "1.27"
       - name: OSV-Scanner (fails on any vulnerability)
-        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
-          scan-args: --recursive ./
+          # --no-call-analysis go: the scanner image's bundled Go (1.26) cannot
+          # load go1.27 code, so reachability analysis errors out. Lockfile
+          # matching still gates (strictly more conservative — it can only add
+          # findings, never remove them). Re-enable when the image ships Go ≥1.27.
+          scan-args: |
+            --recursive ./
+            --no-call-analysis go
 
   sast:
     runs-on: ubuntu-latest
