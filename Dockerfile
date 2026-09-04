@@ -8,7 +8,7 @@ RUN CGO_ENABLED=0 go build -o /out/tide-api ./cmd/tide-api && \
     CGO_ENABLED=0 go build -o /out/tide ./cmd/tide && \
     CGO_ENABLED=0 go build -o /out/tide-sim ./cmd/tide-sim
 
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 COPY --from=build /out/tide-api /out/tide-engine /out/tide /out/tide-sim /usr/local/bin/
 COPY simulator/scenarios /etc/tide/scenarios
