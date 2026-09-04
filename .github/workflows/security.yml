@@ -28,16 +28,17 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           go-version: "1.27"
-      - name: OSV-Scanner (fails on any vulnerability)
+      # Split per lockfile: osv-scanner v2.5.1 only honors IgnoredVulns in
+      # single-source scans (multi-source scans report them "unused").
+      # Single-line args: the action does not split embedded newlines.
+      - name: OSV-Scanner Go (fails on any vulnerability)
         uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
-          # --no-call-analysis go: the scanner image's bundled Go (1.26) cannot
-          # load go1.27 code, so reachability analysis errors out. Lockfile
-          # matching still gates (strictly more conservative — it can only add
-          # findings, never remove them). Re-enable when the image ships Go ≥1.27.
-          scan-args: |
-            --recursive ./
-            --no-call-analysis go
+          scan-args: --lockfile go.mod --no-call-analysis go --config ./osv-scanner.toml
+      - name: OSV-Scanner npm (fails on any vulnerability)
+        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          scan-args: --lockfile apps/console/package-lock.json --config ./osv-scanner.toml
 
   sast:
     runs-on: ubuntu-latest

@@ -69,7 +69,20 @@ export function ingest() {
 export function queries() {
   const ev = http.get(`${BASE_URL}/v1/events?tenant=${TENANT}`, { tags: { name: 'events' } });
   check(ev, { 'events 200': (r) => r.status === 200 });
-  const st = http.get(`${BASE_URL}/v1/vehicles/k6-1/state`, { tags: { name: 'state' } });
-  check(st, { 'state 200|404': (r) => r.status === 200 || r.status === 404 });
+  // Discover a real vehicle from the event stream instead of assuming one:
+  // a hardcoded id (k6-1) silently 404s when VU numbering doesn't start the
+  // ingest range at 1 — and a 200|404-tolerant check masked it completely.
+  let vehicle = null;
+  try {
+    const list = ev.json();
+    if (Array.isArray(list) && list.length > 0) vehicle = list[0].vehicleId;
+  } catch (_) { /* malformed body: state check below fails loudly */ }
+  if (vehicle) {
+    const st = http.get(`${BASE_URL}/v1/vehicles/${vehicle}/state`, { tags: { name: 'state' } });
+    check(st, { 'state 200': (r) => r.status === 200 });
+  } else {
+    const hz = http.get(`${BASE_URL}/healthz`, { tags: { name: 'healthz' } });
+    check(hz, { 'healthz 200': (r) => r.status === 200 });
+  }
   sleep(1);
 }
