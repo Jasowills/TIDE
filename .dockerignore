@@ -1,0 +1,8 @@
+.git
+**/dist
+apps/console/lhci-reports
+apps/console/e2e/screenshots
+apps/console/test-results
+**/.lighthouseci
+*.log
+.DS_Store

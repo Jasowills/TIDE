@@ -2,6 +2,23 @@
   "name": "@tide/sdk",
   "description": "Typed TypeScript client for the TIDE API: telemetry ingest, tenant-scoped event queries, live WebSocket stream",
   "version": "0.1.0",
-  "main": "src/index.ts",
-  "types": "src/index.ts"
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
 }

@@ -100,7 +100,9 @@ services:
         condition: service_healthy
 
   console:
-    build: ./apps/console
+    build:
+      context: .
+      dockerfile: apps/console/Dockerfile
     ports:
       - "5173:5173"
     depends_on:
