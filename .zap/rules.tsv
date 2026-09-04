@@ -1,2 +1,6 @@
 # Local-dev plaintext HSTS has no meaning — ignore with justification, keep the gate.
 10096	IGNORE	HSTS header is TLS-only; compose API is local-dev plaintext
+# Sec-Fetch-Dest is a *request* header the ZAP spider itself never sends, so every
+# spidered URL gets flagged regardless of server behavior. Not a server property;
+# API clients are non-browser (curl, SDKs, webhooks). Revisit if browsers consume this API.
+90005	IGNORE	Missing fetch-metadata request header from the scanner, not a response defect

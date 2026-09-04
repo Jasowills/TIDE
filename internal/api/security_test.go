@@ -43,6 +43,9 @@ func TestSecurityHeaders(t *testing.T) {
 			strings.Contains(csp, "unsafe-inline") || strings.Contains(csp, "unsafe-eval") {
 			t.Fatalf("%s: bad CSP %q", path, csp)
 		}
+		if h.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s: tenant-scoped responses must be no-store", path)
+		}
 	}
 }
 
