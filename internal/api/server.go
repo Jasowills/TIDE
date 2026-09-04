@@ -259,7 +259,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if s.deps.Bus != nil {
-		for _, e := range s.deps.Bus.Events {
+		for _, e := range s.deps.Bus.Snapshot() {
 			if e.TenantID != tenant {
 				continue
 			}

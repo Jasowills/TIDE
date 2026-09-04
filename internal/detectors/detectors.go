@@ -7,6 +7,7 @@ package detectors
 
 import (
 	"math"
+	"sync"
 	"time"
 
 	ctelemetry "github.com/tide-telematics/tide/schemas/telemetry"
@@ -52,7 +53,11 @@ type tripTrack struct {
 }
 
 // Tracker holds per-vehicle detector memory. One per pipeline instance.
+// The HTTP server drives Process from many goroutines — all tracker state
+// sits behind mu. A missing lock here is a FATAL concurrent-map crash under
+// load, not a test flake (found by the spike test, 2026-09-04).
 type Tracker struct {
+	mu       sync.Mutex
 	cfg      Config
 	speeding map[string]*speedingTrack
 	idle     map[string]*idleTrack
@@ -77,6 +82,8 @@ func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
 
 // Detect runs all detectors for one telemetry point + resulting state.
 func (tr *Tracker) Detect(t ctelemetry.Telemetry, s state.VehicleState) []events.Event {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	var out []events.Event
 	out = append(out, tr.speedingDetect(t, s)...)
 	out = append(out, tr.idleDetect(t, s)...)
