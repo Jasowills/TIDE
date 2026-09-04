@@ -58,6 +58,10 @@ services:
       TIDE_POSTGRES_DSN: "postgres://tide:tide@postgres:5432/tide?sslmode=disable"
       TIDE_REDIS_ADDR: "redis:6379"
       TIDE_NATS_URL: "nats://nats:4222"
+      # Requests/min/IP. Perf/load runs raise this (e.g. 1000000) so latency
+      # budgets measure the pipeline, not 429s — the limiter itself is covered
+      # by the Go burst test (A06), not by load runs.
+      TIDE_RATE_LIMIT_PER_MIN: "${TIDE_RATE_LIMIT_PER_MIN:-600}"
     volumes:
       - ./tide.docker.yaml:/etc/tide/tide.yaml:ro
       - ./rules:/rules:ro

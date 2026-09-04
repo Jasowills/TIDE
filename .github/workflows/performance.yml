@@ -1,0 +1,75 @@
+name: performance
+
+# Budgets are enforced here, not in a wiki. k6 thresholds and LHCI assertions
+# fail the job on breach. Per-PR: baseline + spike + Lighthouse. Weekly: soak.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * 1' # Monday 03:00 UTC: weekly soak
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    # Soak needs hours; everything else runs per-PR.
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - name: Bring up API stack
+        run: |
+          docker compose up -d --build postgres redis nats tide-api tide-engine
+          sleep 12
+          curl -sf http://localhost:8080/healthz
+        env:
+          TIDE_RATE_LIMIT_PER_MIN: 1000000
+      - name: Set up k6
+        uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          k6-version: '2.0.0'
+      - name: Baseline (constant mix)
+        run: k6 run --summary-export baseline-summary.json load-tests/ingest-baseline.js
+        env:
+          BASE_URL: http://localhost:8080
+      - name: Spike with recovery assertion
+        if: github.event_name != 'schedule'
+        run: k6 run --summary-export spike-summary.json load-tests/ingest-spike.js
+        env:
+          BASE_URL: http://localhost:8080
+      - name: Soak (weekly schedule only)
+        if: github.event_name == 'schedule'
+        run: k6 run --summary-export soak-summary.json load-tests/ingest-soak.js
+        env:
+          BASE_URL: http://localhost:8080
+      - name: Upload k6 summaries
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          name: k6-summaries
+          path: '*-summary.json'
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    defaults:
+      run:
+        working-directory: apps/console
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/console/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx lhci autorun --config=lighthouserc.cjs
+      - name: Upload LHCI reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+        with:
+          name: lhci-reports
+          path: apps/console/lhci-reports

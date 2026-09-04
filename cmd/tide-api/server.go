@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	tideapi "github.com/tide-telematics/tide/internal/api"
 	"github.com/tide-telematics/tide/adapters"
@@ -30,7 +34,7 @@ func runAPI(ctx context.Context, cfg config.Config) error {
 	srv := tideapi.New(tideapi.Deps{
 		Pipeline: b.Pipeline, States: b.States, Bus: b.MemBus, PG: b.PG,
 		Geo: b.Geo, Geofences: tideapi.NewGeofenceStore(b.PG), Rules: b.Rules,
-		Registry: registry,
+		Registry: registry, Limiter: rateLimiterFromEnv(),
 	})
 	if b.NATSUp {
 		unsub, err := eventbus.Subscribe(cfg.NATS.URL, "tide.events.>", func(raw []byte) {
@@ -62,6 +66,26 @@ func runAPI(ctx context.Context, cfg config.Config) error {
 	}()
 	log.Printf("tide-api listening on :%d (env=%s)", cfg.APIPort, cfg.Env)
 	return httpSrv.ListenAndServe()
+}
+
+// rateLimiterFromEnv honors TIDE_RATE_LIMIT_PER_MIN (requests/min/IP).
+// 0 disables the limiter; unset keeps the 600/min default. Load-test and
+// perf CI raise it so latency budgets measure the pipeline, not 429s — the
+// limiter itself stays covered by the Go burst test (A06).
+func rateLimiterFromEnv() *tideapi.RateLimiter {
+	v := strings.TrimSpace(os.Getenv("TIDE_RATE_LIMIT_PER_MIN"))
+	if v == "" {
+		return nil // New() installs the default
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		log.Printf("api: bad TIDE_RATE_LIMIT_PER_MIN %q, using default", v)
+		return nil
+	}
+	if n == 0 {
+		return tideapi.NewRateLimiter(0, time.Minute) // disabled
+	}
+	return tideapi.NewRateLimiter(n, time.Minute)
 }
 
 func heartbeatStatus(state, msg string) adapters.HealthStatus {

@@ -5,4 +5,6 @@
 /.env
 node_modules/
 apps/console/dist/
+apps/console/lhci-reports/
 benchmarks/last.txt
+apps/console/.lighthouseci/
