@@ -27,17 +27,35 @@ func TestDuplicateYieldsNothing(t *testing.T) {
 	ctx := context.Background()
 	p, bus, _ := NewTestPipeline()
 	base := time.Now()
-	if _, err := p.Process(ctx, tel("a", base, 60, true, seqptr(1))); err != nil {
-		t.Fatal(err)
+	if _, dup, err := p.Process(ctx, tel("a", base, 60, true, seqptr(1))); err != nil || dup {
+		t.Fatalf("first point: dup=%v err=%v", dup, err)
 	}
 	n := len(bus.Events)
 	// Same sequence → dedup hit → zero new events, zero state churn.
-	evs, err := p.Process(ctx, tel("a-dup", base, 60, true, seqptr(1)))
+	evs, dup, err := p.Process(ctx, tel("a-dup", base, 60, true, seqptr(1)))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !dup {
+		t.Fatal("duplicate not flagged")
+	}
 	if len(evs) != 0 || len(bus.Events) != n {
 		t.Fatalf("duplicate produced output: %d new events", len(bus.Events)-n)
+	}
+}
+
+// ADV-0002: points absurdly far in the future are rejected, never absorbed.
+func TestFutureTimestampRejected(t *testing.T) {
+	ctx := context.Background()
+	p, _, _ := NewTestPipeline()
+	fut := tel("f", time.Now().Add(30*24*time.Hour), 80, true, seqptr(9))
+	if _, _, err := p.Process(ctx, fut); err == nil {
+		t.Fatal("far-future point accepted")
+	}
+	// Boundary tolerance: small clock drift still accepted.
+	near := tel("n", time.Now().Add(30*time.Minute), 80, true, seqptr(10))
+	if _, _, err := p.Process(ctx, near); err != nil {
+		t.Fatalf("near-future point rejected: %v", err)
 	}
 }
 
@@ -53,7 +71,7 @@ func TestOutOfOrderFinalState(t *testing.T) {
 	}
 	p1 := mk()
 	for _, x := range ordered {
-		if _, err := p1.Process(ctx, x); err != nil {
+		if _, _, err := p1.Process(ctx, x); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -62,7 +80,7 @@ func TestOutOfOrderFinalState(t *testing.T) {
 	shuffled := []ctelemetry.Telemetry{ordered[2], ordered[0], ordered[1]}
 	p2 := mk()
 	for _, x := range shuffled {
-		if _, err := p2.Process(ctx, x); err != nil {
+		if _, _, err := p2.Process(ctx, x); err != nil {
 			t.Fatal(err)
 		}
 	}

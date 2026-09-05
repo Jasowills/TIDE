@@ -37,7 +37,8 @@ func runAPI(ctx context.Context, cfg config.Config) error {
 		Registry: registry, Limiter: rateLimiterFromEnv(),
 	})
 	if b.NATSUp {
-		unsub, err := eventbus.Subscribe(cfg.NATS.URL, "tide.events.>", func(raw []byte) {
+		// Resilient forward: survives NATS outages without api restart.
+		eventbus.SubscribeResilient(ctx, cfg.NATS.URL, "tide.events.>", func(raw []byte) {
 			var e events.Event
 			if err := json.Unmarshal(raw, &e); err != nil {
 				return
@@ -53,17 +54,34 @@ func runAPI(ctx context.Context, cfg config.Config) error {
 			}
 			srv.Inject(e)
 		})
-		if err != nil {
-			log.Printf("api: nats forward failed: %v", err)
-		} else {
-			defer unsub()
-		}
 	}
 	httpSrv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.APIPort), Handler: srv.Handler()}
 	go func() {
 		<-ctx.Done()
 		_ = httpSrv.Shutdown(context.Background())
 	}()
+	// Event-bus health in Connections (ADV-0005): the bus wrapper remembers
+	// publish failures, so the console shows NATS trouble even when a fresh
+	// dial (doctor) would succeed.
+	if b.NATSBus != nil {
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					ts, msg := b.NATSBus.LastError()
+					if !ts.IsZero() && time.Since(ts) < 10*time.Minute {
+						registry.Set("eventbus", adapters.HealthStatus{State: adapters.StateDegraded, Message: msg})
+					} else {
+						registry.Set("eventbus", adapters.HealthStatus{State: adapters.StateHealthy})
+					}
+				}
+			}
+		}()
+	}
 	log.Printf("tide-api listening on :%d (env=%s)", cfg.APIPort, cfg.Env)
 	return httpSrv.ListenAndServe()
 }
