@@ -41,6 +41,25 @@ beforeEach(() => {
 });
 
 describe('queries', () => {
+  it('construction never requires unused transports (Node 20 has no global WebSocket)', () => {
+    expect(() => new TideClient({ base: 'http://x' })).not.toThrow();
+  });
+
+  it('stream without any WebSocket explains itself', () => {
+    const realWS = (globalThis as Record<string, unknown>).WebSocket;
+    (globalThis as Record<string, unknown>).WebSocket = undefined;
+    try {
+      const c = new TideClient({
+        base: 'http://x',
+        fetchImpl: (async (): Promise<Response> => okJson([])) as unknown as typeof fetch,
+        getLocation: () => ({ protocol: 'http:', host: 'x' }),
+      });
+      expect(() => c.stream(() => {})).toThrow(/WebSocket/);
+    } finally {
+      (globalThis as Record<string, unknown>).WebSocket = realWS;
+    }
+  });
+
   it('binds the global fetch (browsers reject detached window.fetch)', async () => {
     // Regression: capturing globalThis.fetch as a bare reference works in
     // Node (undici tolerates it) but throws "Illegal invocation" in Chromium,

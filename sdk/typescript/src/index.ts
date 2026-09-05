@@ -107,31 +107,45 @@ export interface ClientOptions {
 
 export class TideClient {
   private readonly base: string;
-  private readonly fetchImpl: FetchImpl;
-  private readonly wsImpl: WsImpl;
+  private readonly fetchOpt?: FetchImpl;
+  private readonly wsOpt?: WsImpl;
   private readonly getLocation?: () => { protocol: string; host: string } | undefined;
 
   constructor(opts: ClientOptions | string = {}) {
     if (typeof opts === 'string') opts = { base: opts };
     this.base = opts.base ?? 'http://localhost:8080';
-    // Bind: window.fetch is receiver-sensitive — a detached reference throws
-    // "Illegal invocation" in browsers (Node's undici fetch tolerates it,
-    // which is why unit tests passed and the browser failed).
-    const gf = globalThis.fetch as FetchImpl | undefined;
-    this.fetchImpl = opts.fetchImpl ?? (gf ? gf.bind(globalThis) : missing('fetch'));
-    this.wsImpl =
-      opts.wsImpl ?? (globalThis.WebSocket as unknown as WsImpl | undefined) ?? missing('WebSocket');
+    this.fetchOpt = opts.fetchImpl;
+    this.wsOpt = opts.wsImpl;
     this.getLocation = opts.getLocation;
   }
 
+  // Transports resolve lazily: constructing a client never throws for a
+  // transport you never use (Node 20 has fetch but no global WebSocket).
+  private getFetch(): FetchImpl {
+    if (this.fetchOpt) return this.fetchOpt;
+    const gf = globalThis.fetch as FetchImpl | undefined;
+    // Bind: window.fetch is receiver-sensitive — a detached reference throws
+    // "Illegal invocation" in browsers (Node's undici fetch tolerates it,
+    // which is why unit tests passed and the browser failed).
+    if (gf) return gf.bind(globalThis);
+    return missing('fetch');
+  }
+
+  private getWs(): WsImpl {
+    if (this.wsOpt) return this.wsOpt;
+    const w = globalThis.WebSocket as unknown as WsImpl | undefined;
+    if (w) return w;
+    return missing('WebSocket');
+  }
+
   private async get<T>(path: string, op: string): Promise<T> {
-    const r = await this.fetchImpl(`${this.base}${path}`);
+    const r = await this.getFetch()(`${this.base}${path}`);
     if (!r.ok) throw new TideError(op, r.status, await r.text().catch(() => ''));
     return r.json() as Promise<T>;
   }
 
   private async post<T>(path: string, op: string, body: unknown, okStatuses: number[]): Promise<T> {
-    const r = await this.fetchImpl(`${this.base}${path}`, {
+    const r = await this.getFetch()(`${this.base}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -180,7 +194,7 @@ export class TideClient {
   }
 
   async simulateCancel(id: string): Promise<SimRun> {
-    const r = await this.fetchImpl(`${this.base}/v1/simulate/${encodeURIComponent(id)}`, {
+    const r = await this.getFetch()(`${this.base}/v1/simulate/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
     if (!r.ok) throw new TideError('simulateCancel', r.status, await r.text().catch(() => ''));
@@ -204,7 +218,7 @@ export class TideClient {
     const maxRetries = opts.maxRetries ?? 5;
     const baseDelay = opts.baseDelayMs ?? 1000;
     const url = this.streamUrl();
-    const Ws = this.wsImpl;
+    const Ws = this.getWs();
     let closed = false;
     let attempts = 0;
     let ws: InstanceType<WsImpl> | null = null;
