@@ -40,19 +40,20 @@ test('event explorer fills from the live API', async ({ page }) => {
 
 test('event inspector shows trace IDs', async ({ page }) => {
   await page.getByRole('button', { name: 'Event explorer', exact: true }).click();
-  // Prefer a rule-triggered incident: it must carry the full trace.
-  const incident = page.locator('ul li button', { hasText: 'incident.created' }).first();
-  const target = (await incident.count()) > 0 ? incident : page.locator('ul li button').first();
-  await target.click();
+  // Filter to incidents first: the live stream prepends rows continuously,
+  // so an unfiltered first() can resolve to a different event between the
+  // count check and the click (TOCTOU flake). Filtered, every visible row
+  // is an incident with a full rule trace.
+  await page.getByPlaceholder('filter type/vehicle').fill('incident.created');
+  const first = page.locator('ul li button').first();
+  await expect(first).toBeVisible({ timeout: 15_000 });
+  await first.click();
   const inspector = page.locator('pre');
   await expect(inspector).toBeVisible();
   const text = (await inspector.textContent()) ?? '';
-  // correlationId is mandatory on every event; the incident path asserts the rest.
   expect(text, 'inspector surfaces correlationId').toContain('correlationId');
-  if ((await incident.count()) > 0) {
-    for (const key of ['ruleId', 'ruleVersion', 'causationId']) {
-      expect(text, `incident surfaces ${key}`).toContain(key);
-    }
+  for (const key of ['ruleId', 'ruleVersion', 'causationId']) {
+    expect(text, `incident surfaces ${key}`).toContain(key);
   }
 });
 
