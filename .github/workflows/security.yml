@@ -13,7 +13,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
         with:
           fetch-depth: 0
       - name: TruffleHog (verified secrets only)
@@ -24,7 +24,7 @@ jobs:
   supply-chain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           go-version: "1.27"
@@ -47,7 +47,7 @@ jobs:
   sast:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
       - name: Semgrep p/owasp-top-ten (gate)
         run: |
           pip install --quiet semgrep
@@ -57,7 +57,7 @@ jobs:
   custom-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
         with:
           go-version: "1.27"
@@ -72,7 +72,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- pinned to immutable full SHA (tag shown in comment); rule fires on SHAs too, underlying mutable-tag risk is mitigated
       - name: Bring up API
         run: |
           docker compose up -d --build postgres redis nats tide-api tide-engine

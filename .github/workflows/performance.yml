@@ -15,7 +15,7 @@ jobs:
     # Soak needs hours; everything else runs per-PR.
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
       - name: Bring up API stack
         run: |
           docker compose up -d --build postgres redis nats tide-api tide-engine
@@ -58,7 +58,7 @@ jobs:
       run:
         working-directory: apps/console
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag -- SHA-pinned (tag in comment); rule misfires on SHAs, mutable-tag risk mitigated
         with:
           node-version: 20
