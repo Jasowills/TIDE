@@ -22,7 +22,7 @@ func benchPipeline(b *testing.B, vehicles int) {
 		sp := 60.0
 		ign := true
 		seq := int64(i)
-		_, err := p.Process(ctx, ctelemetry.Telemetry{
+		_, _, err := p.Process(ctx, ctelemetry.Telemetry{
 			ID: "b", TenantID: "t", VehicleID: string(rune('a'+v)) + "-v",
 			DeviceID: "d", Timestamp: base.Add(time.Duration(i) * time.Second), ReceivedAt: base,
 			Location:  ctelemetry.Location{Lat: 52.5, Lng: 13.4},

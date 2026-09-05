@@ -48,13 +48,13 @@ func TestChaosStorm(t *testing.T) {
 	base := time.Now()
 	for i := 0; i < 500; i++ {
 		pt := stormPoint("s", base.Add(time.Duration(i)*time.Second), int64(i%50)) // heavy dup reuse
-		if _, err := p.Process(ctx, pt); err != nil {
+		if _, _, err := p.Process(ctx, pt); err != nil {
 			t.Fatalf("storm point %d: %v", i, err)
 		}
 		// Malformed interleaved: rejected, never fatal.
 		bad := pt
 		bad.Location.Lat = 999
-		if _, err := p.Process(ctx, bad); err == nil {
+		if _, _, err := p.Process(ctx, bad); err == nil {
 			t.Fatalf("malformed point %d accepted", i)
 		}
 	}
@@ -77,7 +77,7 @@ func TestChaosReplayUnderFaults(t *testing.T) {
 		stormPoint("c", base.Add(time.Second), 3),
 	}
 	for _, pt := range pts {
-		_, _ = p.Process(ctx, pt) // never fatal
+		_, _, _ = p.Process(ctx, pt) // never fatal
 	}
 	if len(log.All) != 3 { // dup absorbed before durable append
 		t.Fatalf("want 3 durable points, got %d", len(log.All))
@@ -97,7 +97,7 @@ func TestChaosLiveRedisRestart(t *testing.T) {
 	p.States = states
 	base := time.Now()
 	for i := 0; i < 5; i++ {
-		if _, err := p.Process(ctx, stormPoint("r", base.Add(time.Duration(i)*time.Second), int64(100+i))); err != nil {
+		if _, _, err := p.Process(ctx, stormPoint("r", base.Add(time.Duration(i)*time.Second), int64(100+i))); err != nil {
 			t.Fatal(err)
 		}
 	}

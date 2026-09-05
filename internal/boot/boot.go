@@ -35,6 +35,7 @@ type Bundle struct {
 	Rules    *rules.Engine
 	Geo      *geo.Tracker
 	NATSUp   bool
+	NATSBus  *eventbus.ResilientBus // nil unless NATS reachable at boot
 }
 
 // newDispatcher honors TIDE_WEBHOOK_ALLOW_PRIVATE=1 for dev/test loops that
@@ -96,12 +97,17 @@ func Build(ctx context.Context, cfg config.Config) *Bundle {
 	}
 	b.States = states
 
-	// NATS: fan out (transport + local memory), else memory only.
+	// NATS: fan out (transport + local memory), else memory only. The NATS
+	// leg is wrapped for redial so an outage ends on recovery, not restart.
 	var bus eventbus.Bus = b.MemBus
 	if nb, err := eventbus.NewNATSBus(cfg.NATS.URL); err != nil {
 		log.Printf("boot: nats unavailable (%v) — memory bus", err)
 	} else {
-		bus = eventbus.FanOut{Children: []eventbus.Bus{nb, b.MemBus}}
+		rb := eventbus.NewResilientBus(func() (eventbus.Bus, error) {
+			return eventbus.NewNATSBus(cfg.NATS.URL)
+		}, nb)
+		b.NATSBus = rb
+		bus = eventbus.FanOut{Children: []eventbus.Bus{rb, b.MemBus}}
 		b.NATSUp = true
 		log.Printf("boot: nats at %s", cfg.NATS.URL)
 	}

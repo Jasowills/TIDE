@@ -43,12 +43,11 @@ func defaultTenant() string {
 
 func emitting(p *pipeline.Pipeline, count *atomic.Int64) func(ctx context.Context, t ctelemetry.Telemetry) error {
 	return func(ctx context.Context, t ctelemetry.Telemetry) error {
-		evs, err := p.Process(ctx, t)
+		_, _, err := p.Process(ctx, t)
 		if err != nil {
 			return err
 		}
 		count.Add(1)
-		_ = evs
 		return nil
 	}
 }

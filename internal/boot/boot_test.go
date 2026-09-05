@@ -31,7 +31,7 @@ func TestPostgresDownDoesNotKillIngestion(t *testing.T) {
 	}
 	sp := 60.0
 	ign := true
-	if _, err := p.Process(ctx, ctelemetry.Telemetry{
+	if _, _, err := p.Process(ctx, ctelemetry.Telemetry{
 		ID: "x", TenantID: "t", VehicleID: "v", DeviceID: "d",
 		Timestamp: time.Now(), ReceivedAt: time.Now(),
 		Location:  ctelemetry.Location{Lat: 1, Lng: 2},

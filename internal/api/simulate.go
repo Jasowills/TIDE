@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/tide-telematics/tide/simulator"
 	"github.com/tide-telematics/tide/simulator/faults"
 	"github.com/tide-telematics/tide/simulator/generators"
+	"github.com/tide-telematics/tide/internal/pipeline"
 )
 
 // simulateBounds keep HTTP runs interactive. Larger runs belong to the CLI,
@@ -144,8 +146,18 @@ func (s *Server) runSim(ctx context.Context, st *simStatus, scen generators.Scen
 		default:
 		}
 		pt.ProcessedAt = time.Now().UTC()
-		evs, err := s.deps.Pipeline.Process(ctx, pt)
+		evs, _, err := s.deps.Pipeline.Process(ctx, pt)
 		if err != nil {
+			var perr *pipeline.PublishError
+			if errors.As(err, &perr) {
+				// Bus down mid-run: persist computed events, keep going.
+				for _, e := range perr.Events {
+					st.Events++
+					s.Inject(e)
+				}
+				st.Accepted++
+				continue
+			}
 			s.sims.set(st.ID, func(s *simStatus) { s.State, s.Error = "failed", "processing failed" })
 			return
 		}

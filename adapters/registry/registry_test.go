@@ -75,7 +75,7 @@ func TestTraccarWiringEndToEnd(t *testing.T) {
 	if tel.TenantID != "wired" {
 		t.Fatalf("tenant not carried: %q", tel.TenantID)
 	}
-	if _, err := p.Process(ctx, tel); err != nil {
+	if _, _, err := p.Process(ctx, tel); err != nil {
 		t.Fatalf("pipeline: %v", err)
 	}
 	if len(bus.Events) == 0 {

@@ -34,7 +34,7 @@ func Run(ctx context.Context, points []ctelemetry.Telemetry, build func() *pipel
 	p := build()
 	var out []events.Event
 	for _, pt := range ordered {
-		evs, err := p.Process(ctx, pt)
+		evs, _, err := p.Process(ctx, pt)
 		if err != nil {
 			return Result{}, fmt.Errorf("replay: process %s: %w", pt.ID, err)
 		}

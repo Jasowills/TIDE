@@ -65,6 +65,9 @@ jobs:
           cache: npm
           cache-dependency-path: apps/console/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Build SDK (console resolves @tide/sdk through dist)
+        run: npm ci --no-audit --no-fund && npm run build
+        working-directory: ${{ github.workspace }}/sdk/typescript
       - run: npm run build
       - run: npx lhci autorun --config=lighthouserc.cjs
       - name: Upload LHCI reports

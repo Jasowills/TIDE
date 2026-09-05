@@ -12,7 +12,10 @@ import (
 	ctelemetry "github.com/tide-telematics/tide/schemas/telemetry"
 )
 
-func newID() string {
+// NewID mints a server-side telemetry ID (crypto-random hex). Entry points
+// must assign IDs to ID-less points: without this, every ID-less point shares
+// id="" and collides on the telemetry primary key (ADV-0001).
+func NewID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
@@ -61,7 +64,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if t.ID == "" {
-			t.ID = newID()
+			t.ID = NewID()
 		}
 		t.ReceivedAt = received // server-side, always (T020)
 		if err := t.Validate(); err != nil {

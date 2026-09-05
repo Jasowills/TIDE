@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/tide-telematics/tide/adapters"
 	"github.com/tide-telematics/tide/internal/eventbus"
 	"github.com/tide-telematics/tide/internal/geo"
+	"github.com/tide-telematics/tide/internal/ingest"
 	"github.com/tide-telematics/tide/internal/pipeline"
 	"github.com/tide-telematics/tide/internal/rules"
 	"github.com/tide-telematics/tide/internal/state"
@@ -216,6 +218,9 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid telemetry: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		if t.ID == "" {
+			t.ID = ingest.NewID() // ADV-0001: empty IDs collide on the telemetry PK
+		}
 		if t.ReceivedAt.IsZero() {
 			t.ReceivedAt = received
 		}
@@ -226,8 +231,22 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid telemetry: "+err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
-		evs, err := s.deps.Pipeline.Process(ctx, t)
+		if t.Timestamp.After(time.Now().Add(pipeline.MaxFutureSkew)) {
+			http.Error(w, "timestamp too far in future", http.StatusUnprocessableEntity)
+			return
+		}
+		evs, dup, err := s.deps.Pipeline.Process(ctx, t)
 		if err != nil {
+			var perr *pipeline.PublishError
+			if errors.As(err, &perr) {
+				// Bus down: persist what was computed (PG upserts by id) so
+				// the failure is visible, not silent — then signal retryable.
+				for _, e := range perr.Events {
+					s.Inject(e)
+				}
+				http.Error(w, "bus unavailable, retry", http.StatusServiceUnavailable)
+				return
+			}
 			internalError(w, err)
 			return
 		}
@@ -236,7 +255,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			emitted++
 			s.Inject(e)
 		}
-		if s.deps.PG != nil {
+		if !dup && s.deps.PG != nil {
 			_ = s.deps.PG.AppendTelemetry(ctx, t)
 		}
 	}
