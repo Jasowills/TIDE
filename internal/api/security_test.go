@@ -114,6 +114,18 @@ func TestErrorContractLeaksNothing(t *testing.T) {
 	}
 }
 
+// ADV-0007: oversized bodies are rejected 413, never buffered unboundedly.
+func TestOversizedBodyRejected(t *testing.T) {
+	srv := New(testDeps())
+	// Valid JSON shape, past the cap: the failure must be size, not syntax.
+	big := `{"tenantId":"t","pad":"` + strings.Repeat("x", maxBodyBytes) + `"}`
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/telemetry", strings.NewReader(big)))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("want 413, got %d", rec.Code)
+	}
+}
+
 // A05: SQL-flavored input is data, never a query — it validates or 4xxs,
 // never 500s, and the error text carries no DB vocabulary.
 func TestInjectionInputFailsClosed(t *testing.T) {

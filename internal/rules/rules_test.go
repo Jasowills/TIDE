@@ -60,6 +60,9 @@ func TestRuleFiresAndTraces(t *testing.T) {
 	spec.Then.Webhook = srv.URL
 	disp := webhooks.NewDispatcher()
 	disp.AllowPrivate = true // httptest serves loopback
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go disp.Run(ctx, 1)
 	eng := NewEngine(disp)
 	eng.Dispatcher.BaseDelay = time.Millisecond
 	if err := eng.Publish(spec, time.Now()); err != nil {
@@ -76,8 +79,22 @@ func TestRuleFiresAndTraces(t *testing.T) {
 	if len(tr) != 1 || len(tr[0].ActionsTaken) == 0 {
 		t.Fatalf("evaluation trace missing: %+v", tr)
 	}
+	found := false
+	for _, a := range tr[0].ActionsTaken {
+		if a == "webhook:queued" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("dispatch not queued: %+v", tr[0].ActionsTaken)
+	}
+	// Workers deliver asynchronously: poll, don't assume.
+	deadline := time.Now().Add(5 * time.Second)
+	for len(eng.Dispatcher.Delivered) != 1 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
 	if len(eng.Dispatcher.Delivered) != 1 {
-		t.Fatal("webhook not delivered")
+		t.Fatal("webhook not delivered by workers")
 	}
 }
 

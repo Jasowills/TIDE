@@ -6,6 +6,7 @@ package webhooks
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -67,18 +68,33 @@ type Delivery struct {
 	At      time.Time
 }
 
-// Dispatcher delivers with retry+backoff+jitter and a dead-letter queue.
+// Dispatch delivers with retry+backoff+jitter and a dead-letter queue.
 // AllowPrivate lifts the SSRF private-net block for tests/dev only —
 // production must leave it false (default).
+//
+// Delivery itself is ASYNC via DispatchAsync + Run: rule evaluation (and
+// therefore ingestion) must never wait on a downstream endpoint (ADV-0006).
+// The queue is bounded; overflow dead-letters immediately instead of
+// blocking the caller.
 type Dispatcher struct {
 	Client       *http.Client
 	MaxRetries   int
 	BaseDelay    time.Duration
 	AllowPrivate bool
+	QueueSize    int
 
-	mu       sync.Mutex
-	Delivered []Delivery
+	mu         sync.Mutex
+	Delivered  []Delivery
 	DeadLetter []Delivery
+	queue      chan DispatchJob
+	running    bool
+}
+
+// DispatchJob is one queued delivery.
+type DispatchJob struct {
+	URL    string
+	Secret string
+	Event  events.Event
 }
 
 func NewDispatcher() *Dispatcher {
@@ -86,10 +102,94 @@ func NewDispatcher() *Dispatcher {
 		Client:     &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 5,
 		BaseDelay:  200 * time.Millisecond,
+		QueueSize:  1000,
+		running:    true,
 	}
 }
 
-// Dispatch delivers one event to url signed with secret. A failing endpoint
+func (d *Dispatcher) ensureQueue() chan DispatchJob {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.queue == nil {
+		d.queue = make(chan DispatchJob, d.queueSize())
+	}
+	return d.queue
+}
+
+// DispatchAsync enqueues one delivery without blocking. Full queue or
+// stopped workers dead-letter immediately — the caller never waits.
+func (d *Dispatcher) DispatchAsync(url, secret string, e events.Event) error {
+	d.mu.Lock()
+	running := d.running
+	d.mu.Unlock()
+	if !running {
+		d.record(false, url, e.ID, 0, "webhook: workers not running")
+		return fmt.Errorf("webhook: workers not running")
+	}
+	select {
+	case d.ensureQueue() <- DispatchJob{URL: url, Secret: secret, Event: e}:
+		return nil
+	default:
+		d.record(false, url, e.ID, 0, "webhook: queue full")
+		return fmt.Errorf("webhook: queue full")
+	}
+}
+
+func (d *Dispatcher) queueSize() int {
+	if d.QueueSize > 0 {
+		return d.QueueSize
+	}
+	return 1000
+}
+
+// Run starts workers draining the queue until ctx ends. Remaining queued
+// jobs are dead-lettered on shutdown — visible, never silently dropped.
+func (d *Dispatcher) Run(ctx context.Context, workers int) {
+	d.mu.Lock()
+	if d.queue == nil {
+		d.queue = make(chan DispatchJob, d.queueSize())
+	}
+	d.running = true
+	d.mu.Unlock()
+	if workers <= 0 {
+		workers = 2
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case job, ok := <-d.queue:
+					if !ok {
+						return
+					}
+					_ = d.Dispatch(job.URL, job.Secret, job.Event)
+				}
+			}
+		}()
+	}
+	<-ctx.Done()
+	wg.Wait()
+	d.mu.Lock()
+	var leftovers []DispatchJob
+	for {
+		select {
+		case job := <-d.queue:
+			leftovers = append(leftovers, job)
+		default:
+			d.running = false
+			d.mu.Unlock()
+			for _, job := range leftovers {
+				d.record(false, job.URL, job.Event.ID, 0, "webhook: shutdown with job queued")
+			}
+			return
+		}
+	}
+}
 // dead-letters after MaxRetries without blocking the caller beyond the
 // retry budget (T063).
 func (d *Dispatcher) Dispatch(url, secret string, e events.Event) error {

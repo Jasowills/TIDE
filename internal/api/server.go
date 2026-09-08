@@ -154,6 +154,17 @@ type Server struct {
 	sims    *simRegistry
 }
 
+// maxBodyBytes caps ingestion request bodies (ADV-0007). 32MB admits the
+// largest legitimate batches (~20k points ≈ 7MB) with headroom; anything
+// bigger is rejected 413 instead of holding a handler indefinitely.
+const maxBodyBytes = 32 << 20
+
+// bodyTooLarge reports MaxBytesReader rejections for a 413 (not a 400:
+// the JSON may be fine, it's the size that's refused).
+func bodyTooLarge(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "request body too large")
+}
+
 func New(d Deps) *Server {
 	s := &Server{deps: d, hub: &Hub{}, mux: http.NewServeMux(), sims: newSimRegistry()}
 	if s.deps.Registry == nil {
@@ -192,12 +203,19 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// ADV-0007: bound request bodies — an uncapped JSON body on an
+	// unauthenticated endpoint is attrition-DoS surface.
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	tr := otel.Tracer("tide/api")
 	ctx, span := tr.Start(r.Context(), "ingest")
 	defer span.End()
 	var batch []json.RawMessage
 	var single json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&single); err != nil {
+		if bodyTooLarge(err) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}

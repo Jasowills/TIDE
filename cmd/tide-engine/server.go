@@ -54,7 +54,13 @@ func runEngine(ctx context.Context, cfg config.Config) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ready")) })
-	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.EnginePort), Handler: mux}
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.EnginePort),
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		_ = srv.Shutdown(context.Background())

@@ -223,17 +223,20 @@ func (e *Engine) Evaluate(_ context.Context, t ctelemetry.Telemetry, s state.Veh
 				}
 			}
 			if spec.Then.Webhook != "" && e.Dispatcher != nil {
-				// Dispatch the emitted (or triggering) event.
+				// Dispatch the emitted (or triggering) event. Async: rule
+				// evaluation (and therefore ingestion) never waits on a
+				// downstream endpoint (ADV-0006). Outcome lands in the
+				// dispatcher's delivered/dead-letter record.
 				target := ev
 				for _, o := range out {
 					if o.RuleID == spec.ID {
 						target = o
 					}
 				}
-				if err := e.Dispatcher.Dispatch(spec.Then.Webhook, spec.Then.Secret, target); err != nil {
-					actions = append(actions, "webhook:failed")
+				if err := e.Dispatcher.DispatchAsync(spec.Then.Webhook, spec.Then.Secret, target); err != nil {
+					actions = append(actions, "webhook:dropped")
 				} else {
-					actions = append(actions, "webhook:delivered")
+					actions = append(actions, "webhook:queued")
 				}
 			}
 			e.lastFire[vk] = now

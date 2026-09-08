@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/tide-telematics/tide/internal/config"
@@ -85,12 +86,14 @@ func Build(ctx context.Context, cfg config.Config) *Bundle {
 		}
 	}
 
-	// Redis: hot state + dedup, else memory.
+	// Redis: hot state + dedup, else memory. Redis-backed stores ride behind
+	// circuit breakers so a mid-run outage degrades to memory instead of
+	// 500ing ingestion (ADV-0003); recovery flips back automatically.
 	var states state.Store = state.NewMemoryStore()
 	var dd dedup.Store = dedup.NewMemoryStore(0)
 	if rs := state.NewRedisStore(cfg.Redis.Addr); pingRedis(ctx, cfg.Redis.Addr) {
-		states = rs
-		dd = dedup.NewRedisStore(cfg.Redis.Addr, 0)
+		states = state.NewFallback(rs, state.NewMemoryStore())
+		dd = dedup.NewFallback(dedup.NewRedisStore(cfg.Redis.Addr, 0), dedup.NewMemoryStore(0))
 		log.Printf("boot: redis at %s", cfg.Redis.Addr)
 	} else {
 		log.Printf("boot: redis unavailable — memory hot state (rebuildable, §2.6)")
@@ -137,9 +140,11 @@ func Build(ctx context.Context, cfg config.Config) *Bundle {
 		}
 	}
 	b.Rules = eng
+	// Webhook workers: async delivery off the ingest path (ADV-0006).
+	go eng.Dispatcher.Run(ctx, webhookWorkers)
 
 	b.Pipeline = &pipeline.Pipeline{
-		Dedup: dd, States: states, Log: logSink(b.PG),
+		Dedup: dd, States: states, Log: logSink(ctx, b.PG),
 		Bus: bus, Detectors: detectors.NewTracker(detectors.DefaultConfig()),
 		Geo: b.Geo, Rules: eng,
 	}
@@ -156,35 +161,120 @@ func ruleFiles() []string {
 	return append(matches, matches2...)
 }
 
+// webhookWorkers bounds concurrent downstream deliveries.
+const webhookWorkers = 2
+
 // telemetryStore is the durable write path (*store.PG in prod; stubbed in tests).
 type telemetryStore interface {
 	AppendTelemetry(ctx context.Context, t ctelemetry.Telemetry) error
 }
 
-// pgLog dual-writes durable telemetry when PG is up; else memory.
-func logSink(pg *store.PG) pipeline.TelemetryLog {
+// logSink builds the durable write path: direct PG writes, bounded pending
+// queue, background drain. Callers get a TelemetryLog; the drain loop starts here.
+func logSink(ctx context.Context, pg *store.PG) pipeline.TelemetryLog {
 	if pg == nil {
 		return &pipeline.MemoryLog{}
 	}
-	return &pgLog{pg: pg, mem: &pipeline.MemoryLog{}}
+	l := &pgLog{pg: pg}
+	l.StartDrain(ctx)
+	return l
 }
 
+// pgBufferCap bounds the outage buffer (§2.10: "buffer with a hard cap").
+// Past it the oldest points are shed (newest-wins: live state matters more
+// than history; PG upserts keep redelivery safe). Memory can never grow
+// without limit (ADV-0004).
+const (
+	pgBufferCap     = 10000
+	pgDrainInterval = 10 * time.Second
+	pgDrainBatch    = 500
+)
+
+// pgLog dual-writes durable telemetry when PG is up. When PG appends fail,
+// points park in a bounded pending queue drained by StartDrain — nothing is
+// silently dropped on recovery, and memory cannot grow without bound.
 type pgLog struct {
-	pg  telemetryStore
-	mem *pipeline.MemoryLog
+	pg      telemetryStore
+	mu      sync.Mutex
+	pending []ctelemetry.Telemetry
+	dropped int64
 }
 
 func (l *pgLog) Append(ctx context.Context, t ctelemetry.Telemetry) error {
-	_ = l.mem.Append(ctx, t)
-	// §2.10: Postgres down must not kill ingestion — buffer (memory) with a
-	// hard cap and continue; the error is logged, not returned.
-	if err := l.pg.AppendTelemetry(ctx, t); err != nil {
-		log.Printf("boot: postgres append failed, buffered in memory: %v", err)
+	if err := l.pg.AppendTelemetry(ctx, t); err == nil {
+		return nil
+	} else {
+		_ = err
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.pending) >= pgBufferCap {
+		l.dropped++
+		log.Printf("boot: telemetry buffer full (%d), shedding oldest", pgBufferCap)
+		// Shed oldest, keep newest: bounded memory matters more than any
+		// single point; onConflict upserts keep redelivery safe.
+		copy(l.pending, l.pending[1:])
+		l.pending = l.pending[:len(l.pending)-1]
+	}
+	l.pending = append(l.pending, t)
+	log.Printf("boot: postgres append failed, buffered in memory (%d pending)", len(l.pending))
 	return nil
 }
 
-func (l *pgLog) All() []ctelemetry.Telemetry { return l.mem.All }
+// StartDrain retries the pending queue against PG until ctx ends: what was
+// accepted during an outage reaches durable storage after recovery (ADV-0004).
+// PG upserts make redelivery idempotent; a failed batch stays queued.
+func (l *pgLog) StartDrain(ctx context.Context) {
+	go func() {
+		t := time.NewTicker(pgDrainInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				l.drainOnce(ctx)
+			}
+		}
+	}()
+}
+
+func (l *pgLog) drainOnce(ctx context.Context) {
+	l.mu.Lock()
+	n := len(l.pending)
+	if n > pgDrainBatch {
+		n = pgDrainBatch
+	}
+	batch := append([]ctelemetry.Telemetry(nil), l.pending[:n]...)
+	l.mu.Unlock()
+	flushed := 0
+	for _, t := range batch {
+		if err := l.pg.AppendTelemetry(ctx, t); err != nil {
+			break
+		}
+		flushed++
+	}
+	if flushed == 0 {
+		return
+	}
+	l.mu.Lock()
+	l.pending = append([]ctelemetry.Telemetry(nil), l.pending[flushed:]...)
+	l.mu.Unlock()
+	log.Printf("boot: drained %d buffered points to postgres", flushed)
+}
+
+// Pending reports buffered (not-yet-durable) points; Dropped counts shed points.
+func (l *pgLog) Pending() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.pending)
+}
+
+func (l *pgLog) Dropped() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.dropped
+}
 
 func pingRedis(ctx context.Context, addr string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

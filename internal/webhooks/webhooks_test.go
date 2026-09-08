@@ -15,6 +15,28 @@ func evt(id string) events.Event {
 		VehicleID: "v", Timestamp: time.Now(), CorrelationID: "c", SchemaVersion: 1}
 }
 
+// ADV-0006: async enqueue never blocks, even with no workers running;
+// overflow dead-letters instead of stalling the caller.
+func TestDispatchAsyncNeverBlocks(t *testing.T) {
+	d := NewDispatcher()
+	d.QueueSize = 2
+	done := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		go func(i int) {
+			done <- d.DispatchAsync("https://example.com/hook", "s", evt("q"))
+		}(i)
+	}
+	timeout := time.After(5 * time.Second)
+	for i := 0; i < 8; i++ {
+		select {
+		case err := <-done:
+			_ = err // queued or dropped-full; blocking is the failure mode
+		case <-timeout:
+			t.Fatal("DispatchAsync blocked")
+		}
+	}
+}
+
 func TestSignVerifyRoundTrip(t *testing.T) {
 	body := []byte(`{"a":1}`)
 	sig, ts := Sign("s3cr3t", "e1", time.Now().UTC(), body)

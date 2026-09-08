@@ -55,7 +55,13 @@ func runAPI(ctx context.Context, cfg config.Config) error {
 			srv.Inject(e)
 		})
 	}
-	httpSrv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.APIPort), Handler: srv.Handler()}
+	httpSrv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.APIPort),
+		Handler:      srv.Handler(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		_ = httpSrv.Shutdown(context.Background())

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -43,6 +44,9 @@ func TestVerticalSlice(t *testing.T) {
 	bus := &eventbus.MemoryBus{}
 	disp := webhooks.NewDispatcher()
 	disp.AllowPrivate = true // test consumer is loopback
+	sliceCtx, sliceCancel := context.WithCancel(context.Background())
+	defer sliceCancel()
+	go disp.Run(sliceCtx, 1)
 	eng := rules.NewEngine(disp)
 	eng.Dispatcher.BaseDelay = time.Millisecond
 	spec, err := rules.ParseSpec([]byte(`
@@ -105,7 +109,11 @@ maxActionsPerHour: 1000
 	if evs[0]["ruleVersion"] != "v1" || evs[0]["causationId"] == "" {
 		t.Fatalf("incident missing trace fields: %v", evs[0])
 	}
-	// …webhook delivered with valid signature…
+	// …webhook delivered with valid signature (async workers: poll)…
+	webhookDeadline := time.Now().Add(5 * time.Second)
+	for len(delivered) == 0 && time.Now().Before(webhookDeadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
 	if len(delivered) == 0 {
 		t.Fatal("no webhook delivered to consumer")
 	}
