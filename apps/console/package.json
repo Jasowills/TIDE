@@ -11,13 +11,16 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@tide/sdk": "file:../../sdk/typescript",
+    "leaflet": "1.9.4",
+    "lucide-react": "1.47.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@tide/sdk": "file:../../sdk/typescript"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
+    "@types/leaflet": "1.9.22",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.2.0",
